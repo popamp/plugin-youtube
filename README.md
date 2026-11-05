@@ -31,6 +31,17 @@ In Options > Plug-ins…:
 
 Popamp's HTTP proxy (Preferences) is passed to both programs.
 
+Keep `yt-dlp` up to date (`pipx install yt-dlp`; distribution packages
+are often too old), because YouTube changes often break old versions.
+Recent versions also want a JavaScript runtime such as `deno` for full
+format support.
+
+## Tested with
+
+yt-dlp 2026.10.26 and ffmpeg 6.1.1 on Ubuntu: a video and a `youtu.be`
+link (title, uploader, length, seeking), a channel's videos, and an
+unavailable video (its error shows in Popamp).
+
 ## Build
 
 ```sh
