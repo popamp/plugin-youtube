@@ -1,0 +1,31 @@
+id = "youtube"
+name = "YouTube"
+version = "1.0.0"
+api = "1.0"
+kind = "source"
+description = "Plays YouTube videos, playlists and channels through yt-dlp and ffmpeg."
+
+[source]
+hosts = ["youtube.com", "*.youtube.com", "youtu.be", "youtube-nocookie.com", "www.youtube-nocookie.com"]
+slow = true
+
+[permissions]
+exec = ["yt-dlp", "ffmpeg"]
+
+[[setting]]
+key = "yt-dlp"
+label = "yt-dlp program"
+type = "path"
+default = "yt-dlp"
+
+[[setting]]
+key = "ffmpeg"
+label = "ffmpeg program"
+type = "path"
+default = "ffmpeg"
+
+[[setting]]
+key = "format"
+label = "yt-dlp format"
+type = "text"
+default = "bestaudio[ext=m4a]/bestaudio"

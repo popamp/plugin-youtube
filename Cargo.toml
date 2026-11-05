@@ -1,0 +1,24 @@
+[package]
+name = "popamp-plugin-youtube"
+description = "YouTube for Popamp: videos, playlists and channels through yt-dlp and ffmpeg"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.89"
+authors = ["Gunyakov <web@gunyakov.pro>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/popamp/plugin-youtube"
+publish = false
+
+[lib]
+# cdylib is the plug-in; rlib lets `cargo test` run its logic natively.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+extism-pdk = "1.4"
+popamp-plugin-api = { git = "https://github.com/popamp/popamp-plugin-api", branch = "main" }
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
