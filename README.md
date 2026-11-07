@@ -7,8 +7,16 @@ runs those two programs and never touches the network or your files.
 
 ## Install
 
-You need Popamp built with plug-ins (`cargo build --release --features
-plugins`), and `yt-dlp` and `ffmpeg` installed.
+You need Popamp Plus, the build with plug-ins, 0.6.0 or newer. From
+[apt.popamp.app](https://apt.popamp.app), with `yt-dlp` and `ffmpeg`:
+
+```sh
+sudo apt install popamp-plugin-youtube
+```
+
+It stays off until you allow it, as below. Or, with any build with
+plug-ins (`cargo build --release --features plugins`) and `yt-dlp` and
+`ffmpeg` installed, clone it into Popamp's plug-ins folder:
 
 ```sh
 git clone https://github.com/popamp/plugin-youtube ~/.local/share/popamp/plugins/youtube
