@@ -9,8 +9,9 @@ pub mod youtube;
 mod plugin {
     use crate::youtube::{self, Cache, Resolved, Settings};
     use extism_pdk::*;
-    use popamp_plugin_api::{config as keys, ExecOutput, ExecRequest, Play, Tags, Track, Version, VERSION};
+    use popamp_plugin_api::{ExecOutput, ExecRequest, Play, Tags, Track, Version, VERSION};
     use std::cell::RefCell;
+    use std::collections::BTreeMap;
 
     #[host_fn]
     extern "ExtismHost" {
@@ -23,11 +24,11 @@ mod plugin {
     }
 
     fn settings() -> Result<Settings, Error> {
-        Ok(Settings { format: config::get("format")?.unwrap_or_default(), proxy: config::get(keys::PROXY)?.unwrap_or_default() })
+        Ok(Settings { format: config::get("format")?.unwrap_or_default() })
     }
 
-    fn ytdlp(args: Vec<String>) -> Result<serde_json::Value, Error> {
-        let out = unsafe { popamp_exec(Json(ExecRequest { program: "yt-dlp".into(), args }))? }.0;
+    fn ytdlp(command: &str, vars: BTreeMap<String, String>) -> Result<serde_json::Value, Error> {
+        let out = unsafe { popamp_exec(Json(ExecRequest { command: command.into(), vars }))? }.0;
         youtube::ytdlp_json(out).map_err(Error::msg)
     }
 
@@ -36,7 +37,7 @@ mod plugin {
         if let Some(r) = CACHE.with_borrow(|c| c.get(url, now)) {
             return Ok(r);
         }
-        let r = Resolved::from_json(&ytdlp(s.resolve_args(url))?).map_err(Error::msg)?;
+        let r = Resolved::from_json(&ytdlp("resolve", s.resolve_vars(url))?).map_err(Error::msg)?;
         CACHE.with_borrow_mut(|c| c.put(url, now, r.clone()));
         Ok(r)
     }
@@ -51,7 +52,7 @@ mod plugin {
         if youtube::is_single_video(&location) {
             return Ok(Json(None));
         }
-        Ok(Json(Some(youtube::parse_listing(&ytdlp(settings()?.list_args(&location))?))))
+        Ok(Json(Some(youtube::parse_listing(&ytdlp("list", youtube::list_vars(&location))?))))
     }
 
     #[plugin_fn]
@@ -61,7 +62,6 @@ mod plugin {
 
     #[plugin_fn]
     pub fn open(Json(location): Json<String>) -> FnResult<Json<Play>> {
-        let s = settings()?;
-        Ok(Json(resolve(&location, &s)?.play(&s)))
+        Ok(Json(resolve(&location, &settings()?)?.play()))
     }
 }
