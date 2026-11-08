@@ -1,53 +1,49 @@
-//! What the plug-in does, without Extism: the yt-dlp arguments, reading its
+//! What the plug-in does, without Extism: the values for its commands (the
+//! commands themselves are in `plugin.toml`), reading yt-dlp's
 //! JSON, the ffmpeg pipe and the cache. Pure, so it is tested natively.
 //!
 //! Stream URLs expire after a few hours, so playlists keep the YouTube page
 //! URL and it is resolved again (with a short cache) whenever it is played.
 
-use popamp_plugin_api::{ExecOutput, Play, Tags, Track, START};
+use popamp_plugin_api::{ExecOutput, Play, Tags, Track};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// ffmpeg's output rate.
 pub const RATE: u32 = 48_000;
 /// How long a resolved stream URL is used again.
 pub const CACHE_TTL_MS: u64 = 3_600_000;
-/// Upper bound for expanding playlists and channels.
-pub const MAX_PLAYLIST: usize = 500;
 
 /// The plug-in's configuration, as the player gives it.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Settings {
     /// yt-dlp format selector.
     pub format: String,
-    /// HTTP proxy (`[user:pass@]host:port`), empty for none.
-    pub proxy: String,
+}
+
+/// The player takes https addresses only; a link pasted as http is the
+/// same page.
+fn secure(url: &str) -> String {
+    match url.strip_prefix("http://") {
+        Some(rest) => format!("https://{rest}"),
+        None => url.to_string(),
+    }
+}
+
+fn vars<const N: usize>(pairs: [(&str, String); N]) -> BTreeMap<String, String> {
+    pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
 
 impl Settings {
-    fn proxy_url(&self) -> Option<String> {
-        let p = self.proxy.trim();
-        (!p.is_empty()).then(|| format!("http://{p}"))
+    /// The values of `resolve`: one video's JSON with its audio stream.
+    pub fn resolve_vars(&self, url: &str) -> BTreeMap<String, String> {
+        vars([("format", self.format.trim().to_string()), ("url", secure(url))])
     }
+}
 
-    fn ytdlp_args(&self, args: &[&str]) -> Vec<String> {
-        let mut all: Vec<String> = ["--no-warnings", "--no-progress"].map(String::from).into();
-        if let Some(p) = self.proxy_url() {
-            all.extend(["--proxy".into(), p]);
-        }
-        all.extend(args.iter().map(|a| a.to_string()));
-        all
-    }
-
-    /// yt-dlp arguments that print one video's JSON with its audio stream.
-    pub fn resolve_args(&self, url: &str) -> Vec<String> {
-        self.ytdlp_args(&["-j", "--no-playlist", "-f", &self.format, url])
-    }
-
-    /// yt-dlp arguments that list a playlist or channel without resolving it.
-    pub fn list_args(&self, url: &str) -> Vec<String> {
-        self.ytdlp_args(&["-J", "--flat-playlist", "--playlist-end", &MAX_PLAYLIST.to_string(), url])
-    }
+/// The values of `list`: a playlist or channel, without resolving it.
+pub fn list_vars(url: &str) -> BTreeMap<String, String> {
+    vars([("url", secure(url))])
 }
 
 /// True when the URL names one video (as opposed to a playlist or channel).
@@ -127,35 +123,25 @@ impl Resolved {
     }
 
     /// How to play it: ffmpeg decodes the stream to 48 kHz stereo `f32`.
-    pub fn play(self, settings: &Settings) -> Play {
-        let mut args: Vec<String> = ["-nostdin", "-hide_banner", "-loglevel", "error"].map(String::from).into();
-        args.extend(["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5"].map(String::from));
+    pub fn play(self) -> Play {
+        let mut vars = vars([("stream", self.stream_url)]);
         let mut extra = String::new();
         for (k, v) in &self.headers {
             if k.eq_ignore_ascii_case("user-agent") {
-                args.extend(["-user_agent".into(), v.clone()]);
+                vars.insert("user_agent".into(), v.clone());
             } else {
                 extra.push_str(&format!("{k}: {v}\r\n"));
             }
         }
         if !extra.is_empty() {
-            args.extend(["-headers".into(), extra]);
+            vars.insert("headers".into(), extra);
         }
-        if let Some(p) = settings.proxy_url() {
-            args.extend(["-http_proxy".into(), p]);
-        }
-        if !self.is_live {
-            args.extend(["-ss".into(), START.into()]);
-        }
-        args.extend(["-i".into(), self.stream_url]);
-        args.extend(["-vn", "-f", "f32le", "-ac", "2", "-ar"].map(String::from));
-        args.extend([RATE.to_string(), "pipe:1".into()]);
         let mut tags = self.tags;
         tags.codec.get_or_insert_with(|| "YOUTUBE".into());
         if self.is_live {
             tags.length_ms = None;
         }
-        Play::Pipe { program: "ffmpeg".into(), args, rate: RATE, seekable: !self.is_live, tags }
+        Play::Pipe { command: "play".into(), vars, rate: RATE, seekable: !self.is_live, tags }
     }
 }
 
@@ -219,14 +205,21 @@ mod tests {
     }
 
     #[test]
-    fn asks_ytdlp_through_the_proxy_for_the_format() {
-        let s = Settings { format: "bestaudio".into(), proxy: " h:1 ".into() };
+    fn asks_ytdlp_for_the_format_and_always_over_https() {
+        let s = Settings { format: " bestaudio ".into() };
         assert_eq!(
-            s.resolve_args("https://youtu.be/a"),
-            ["--no-warnings", "--no-progress", "--proxy", "http://h:1", "-j", "--no-playlist", "-f", "bestaudio", "https://youtu.be/a"]
+            s.resolve_vars("https://youtu.be/a"),
+            vars([("format", "bestaudio".to_string()), ("url", "https://youtu.be/a".to_string())])
         );
-        let none = Settings { format: "f".into(), proxy: String::new() };
-        assert_eq!(none.list_args("u"), ["--no-warnings", "--no-progress", "-J", "--flat-playlist", "--playlist-end", "500", "u"]);
+        assert_eq!(list_vars("http://youtu.be/a"), vars([("url", "https://youtu.be/a".to_string())]));
+    }
+
+    #[test]
+    fn the_manifest_has_every_value_the_plugin_gives() {
+        let manifest = include_str!("../plugin.toml");
+        for name in ["format", "url", "user_agent", "headers", "stream"] {
+            assert!(manifest.contains(&format!("\"{{{name}}}\"")), "{name}");
+        }
     }
 
     #[test]
@@ -287,7 +280,7 @@ mod tests {
 
     fn resolved() -> Resolved {
         let v = serde_json::json!({
-            "url": "https://media/a",
+            "url": "https://rr1.googlevideo.com/a",
             "http_headers": {"User-Agent": "UA", "Referer": "r"},
             "duration": 5,
         });
@@ -296,26 +289,18 @@ mod tests {
 
     #[test]
     fn plays_a_video_through_ffmpeg_from_the_start_asked() {
-        let Play::Pipe { program, args, rate, seekable, tags } = resolved().play(&Settings { proxy: "h:1".into(), ..Default::default() })
-        else {
-            panic!()
-        };
-        let at = |a: &str| args.iter().position(|x| x == a).unwrap();
-        assert_eq!((program.as_str(), rate), ("ffmpeg", RATE));
-        assert_eq!(args[at("-ss") + 1], START);
-        assert!(at("-ss") < at("-i"));
-        assert_eq!(args[at("-i") + 1], "https://media/a");
-        assert_eq!(args[at("-user_agent") + 1], "UA");
-        assert_eq!(args[at("-headers") + 1], "Referer: r\r\n");
-        assert_eq!(args[at("-http_proxy") + 1], "http://h:1");
+        let Play::Pipe { command, vars, rate, seekable, tags } = resolved().play() else { panic!() };
+        assert_eq!((command.as_str(), rate), ("play", RATE));
+        assert_eq!(vars["stream"], "https://rr1.googlevideo.com/a");
+        assert_eq!(vars["user_agent"], "UA");
+        assert_eq!(vars["headers"], "Referer: r\r\n");
         assert_eq!((seekable, tags.length_ms, tags.codec.as_deref()), (true, Some(5000), Some("YOUTUBE")));
         assert_eq!(Resolved::from_json(&serde_json::json!({"title":"x"})), Err("yt-dlp found no audio stream".into()));
     }
 
     #[test]
     fn a_live_stream_plays_from_now_and_cannot_seek() {
-        let Play::Pipe { args, seekable, tags, .. } = Resolved { is_live: true, ..resolved() }.play(&Settings::default()) else { panic!() };
-        assert!(!args.iter().any(|a| a == "-ss" || a == "-http_proxy"));
+        let Play::Pipe { seekable, tags, .. } = Resolved { is_live: true, ..resolved() }.play() else { panic!() };
         assert_eq!((seekable, tags.length_ms), (false, None));
     }
 

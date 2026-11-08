@@ -9,8 +9,29 @@ description = "Plays YouTube videos, playlists and channels through yt-dlp and f
 hosts = ["youtube.com", "*.youtube.com", "youtu.be", "youtube-nocookie.com", "www.youtube-nocookie.com"]
 slow = true
 
-[permissions]
-exec = ["yt-dlp", "ffmpeg"]
+[[permissions.exec]]
+id = "resolve"
+program = "yt-dlp"
+args = ["--no-warnings", "--no-progress", ["--proxy", "{proxy}"], "-j", "--no-playlist", "-f", "{format}", "--", "{url}"]
+[permissions.exec.vars]
+format = { type = "text" }
+url = { type = "url", hosts = ["youtube.com", "*.youtube.com", "youtu.be", "youtube-nocookie.com", "www.youtube-nocookie.com"] }
+
+[[permissions.exec]]
+id = "list"
+program = "yt-dlp"
+args = ["--no-warnings", "--no-progress", ["--proxy", "{proxy}"], "-J", "--flat-playlist", "--playlist-end", "500", "--", "{url}"]
+[permissions.exec.vars]
+url = { type = "url", hosts = ["youtube.com", "*.youtube.com", "youtu.be", "youtube-nocookie.com", "www.youtube-nocookie.com"] }
+
+[[permissions.exec]]
+id = "play"
+program = "ffmpeg"
+args = ["-nostdin", "-hide_banner", "-loglevel", "error", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5", ["-user_agent", "{user_agent}"], ["-headers", "{headers}"], ["-http_proxy", "{proxy}"], ["-ss", "{start}"], "-i", "{stream}", "-vn", "-f", "f32le", "-ac", "2", "-ar", "48000", "pipe:1"]
+[permissions.exec.vars]
+user_agent = { type = "text" }
+headers = { type = "headers" }
+stream = { type = "url", hosts = ["*.googlevideo.com"] }
 
 [[setting]]
 key = "yt-dlp"
