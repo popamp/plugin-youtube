@@ -16,4 +16,5 @@ jobs:
     uses: popamp/apt/.github/workflows/addon-release.yml@main
     with:
       recommends: "yt-dlp, ffmpeg"
+      min-popamp: "0.7.0"
     secrets: inherit
