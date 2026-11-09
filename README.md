@@ -7,7 +7,7 @@ runs those two programs and never touches the network or your files.
 
 ## Install
 
-You need Popamp Plus, the build with plug-ins, 0.6.0 or newer. From
+You need Popamp Plus, the build with plug-ins, 0.7.0 or newer. From
 [apt.popamp.app](https://apt.popamp.app), with `yt-dlp` and `ffmpeg`:
 
 ```sh

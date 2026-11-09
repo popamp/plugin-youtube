@@ -1,6 +1,6 @@
 id = "youtube"
 name = "YouTube"
-version = "1.0.0"
+version = "1.1.0"
 api = "1.0"
 kind = "source"
 description = "Plays YouTube videos, playlists and channels through yt-dlp and ffmpeg."
